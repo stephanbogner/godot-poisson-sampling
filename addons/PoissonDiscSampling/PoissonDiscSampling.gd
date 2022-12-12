@@ -24,11 +24,32 @@ var _transpose: Vector2
 #
 # returns an Array of Vector2D with points in the order of their discovery
 func generate_points(radius: float, sample_region_shape, retries:int = 30, start_pos := Vector2(INF, INF)) -> Array:
+	randomize()
+	
 	_radius = radius
 	_sample_region_shape = sample_region_shape
 	_retries = retries
 	_start_pos = start_pos
-	_init_vars()
+	
+	# If no special start position is defined, pick one
+	if _start_pos.x == INF:
+		_start_pos = get_default_start_position(sample_region_shape)
+	
+	_sample_region_rect = get_region_bbox(sample_region_shape)
+	_cell_size = get_cell_size(_radius)
+	var cols_and_rows = get_cols_and_rows(_sample_region_rect, _cell_size)
+	_cols = cols_and_rows.cols
+	_rows = cols_and_rows.rows
+	
+	_cell_size_scaled = get_cell_size_scaled(_sample_region_rect, cols_and_rows.cols, cols_and_rows.rows)
+	# use tranpose to map points starting from origin to calculate grid position
+	_transpose = get_transpose(_sample_region_rect)
+	
+	_points = []
+	_spawn_points = []
+	_spawn_points.append(_start_pos)
+	
+	_grid = get_grid(cols_and_rows.cols, cols_and_rows.rows)
 	
 	while _spawn_points.size() > 0:
 		var spawn_index: int = randi() % _spawn_points.size()
@@ -80,58 +101,74 @@ func _is_point_in_region(sample: Vector2, region_shape, region_bbox) -> bool:
 				return false
 	return false
 
-func _init_vars() -> void:
-	randomize()
-	
-	# identify the type of shape and it's bounding rectangle and starting point
-	match typeof(_sample_region_shape):
+#if _start_pos.x == INF:
+func get_default_start_position(region_shape):
+	match typeof(region_shape):
 		TYPE_RECT2:
-			_sample_region_rect = _sample_region_shape
-			if _start_pos.x == INF:
-				_start_pos.x = _sample_region_rect.position.x + _sample_region_rect.size.x * randf()
-				_start_pos.y = _sample_region_rect.position.y + _sample_region_rect.size.y * randf()
-			
+			return Vector2(
+				region_shape.position.x + region_shape.size.x * randf(),
+				region_shape.position.y + region_shape.size.y * randf()
+			)
+		
 		TYPE_VECTOR2_ARRAY, TYPE_ARRAY:
-			var start: Vector2 = _sample_region_shape[0]
-			var end: Vector2 = _sample_region_shape[0]
-			for i in range(1, _sample_region_shape.size()):
-				start.x = min(start.x, _sample_region_shape[i].x)
-				start.y = min(start.y, _sample_region_shape[i].y)
-				end.x = max(end.x, _sample_region_shape[i].x)
-				end.y = max(end.y, _sample_region_shape[i].y)
-			_sample_region_rect = Rect2(start, end - start)
-			if _start_pos.x == INF:
-				var n: int = _sample_region_shape.size()
-				var i: int = randi() % n
-				_start_pos = _sample_region_shape[i] + (_sample_region_shape[(i + 1) % n] - _sample_region_shape[i]) * randf()
-			
+			var n: int = region_shape.size()
+			var i: int = randi() % n
+			return region_shape[i] + (region_shape[(i + 1) % n] - region_shape[i]) * randf()
+		
 		TYPE_VECTOR3:
-			var x = _sample_region_shape.x
-			var y = _sample_region_shape.y
-			var r = _sample_region_shape.z
-			_sample_region_rect = Rect2(x - r, y - r, r * 2, r * 2)
-			if _start_pos.x == INF:
-				var angle: float = 2 * PI * randf()
-				_start_pos = Vector2(x, y) + Vector2(cos(angle), sin(angle)) * r * randf()
+			var angle: float = 2 * PI * randf()
+			return Vector2(region_shape.x, region_shape.y) + Vector2(cos(angle), sin(angle)) * region_shape.z * randf()
+	
 		_:
-			_sample_region_shape = Rect2(0, 0, 0, 0)
+			return Vector2.ZERO
+
+func get_region_bbox(region_shape):
+	match typeof(region_shape):
+		TYPE_RECT2:
+			return region_shape
+	
+		TYPE_VECTOR2_ARRAY, TYPE_ARRAY:
+			var start: Vector2 = region_shape[0]
+			var end: Vector2 = region_shape[0]
+			for i in range(1, region_shape.size()):
+				start.x = min(start.x, region_shape[i].x)
+				start.y = min(start.y, region_shape[i].y)
+				end.x = max(end.x, region_shape[i].x)
+				end.y = max(end.y, region_shape[i].y)
+			return Rect2(start, end - start)
+		
+		TYPE_VECTOR3:
+			var x = region_shape.x
+			var y = region_shape.y
+			var r = region_shape.z
+			return Rect2(x - r, y - r, r * 2, r * 2)
+
+		_:
 			push_error("Unrecognized shape!!! Please input a valid shape")
-	
-	_cell_size = _radius / sqrt(2)
-	_cols = max(floor(_sample_region_rect.size.x / _cell_size), 1)
-	_rows = max(floor(_sample_region_rect.size.y / _cell_size), 1)
-	# scale the cell size in each axis 
-	_cell_size_scaled.x = _sample_region_rect.size.x / _cols 
-	_cell_size_scaled.y = _sample_region_rect.size.y / _rows
-	# use tranpose to map points starting from origin to calculate grid position
-	_transpose = -_sample_region_rect.position
-	
-	_grid = []
-	for i in _cols:
-		_grid.append([])
-		for j in _rows:
-			_grid[i].append(-1)
-	
-	_points = []
-	_spawn_points = []
-	_spawn_points.append(_start_pos)
+			return Rect2(0, 0, 0, 0)
+
+func get_cell_size(radius):
+	return radius / sqrt(2)
+
+func get_cols_and_rows(region_bbox, cell_size):
+	return {
+		"cols": max(floor(region_bbox.size.x / cell_size), 1),
+		"rows": max(floor(region_bbox.size.y / cell_size), 1)
+	}
+
+func get_cell_size_scaled(region_bbox, cols, rows) -> Vector2:
+	return Vector2(
+		region_bbox.size.x / cols,
+		region_bbox.size.y / rows
+	)
+
+func get_transpose(region_bbox):
+	return -region_bbox.position
+
+func get_grid(cols, rows):
+	var grid = []
+	for i in cols:
+		grid.append([])
+		for j in rows:
+			grid[i].append(-1)
+	return grid
