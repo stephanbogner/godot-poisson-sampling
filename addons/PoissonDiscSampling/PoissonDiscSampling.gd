@@ -1,19 +1,5 @@
 class_name PoissonDiscSampling
 
-var _radius: float
-var _sample_region_shape
-var _retries: int
-var _start_pos: Vector2
-var _sample_region_rect: Rect2
-var _cell_size: float
-var _rows: int
-var _cols: int
-var _cell_size_scaled: Vector2
-var _grid: Array = []
-var _points: Array = []
-var _spawn_points: Array = []
-var _transpose: Vector2
-
 # radius - minimum distance between points
 # sample_region_shape - takes any of the following:
 # 		-a Rect2 for rectangular region
@@ -23,70 +9,59 @@ var _transpose: Vector2
 # start_pos - optional parameter specifying the starting point
 #
 # returns an Array of Vector2D with points in the order of their discovery
-func generate_points(radius: float, sample_region_shape, retries:int = 30, start_pos := Vector2(INF, INF)) -> Array:
+func generate_points(radius: float, region_shape, retries:int = 30, start_pos := Vector2(INF, INF)) -> Array:
 	randomize()
 	
-	_radius = radius
-	_sample_region_shape = sample_region_shape
-	_retries = retries
-	_start_pos = start_pos
-	
 	# If no special start position is defined, pick one
-	if _start_pos.x == INF:
-		_start_pos = get_default_start_position(sample_region_shape)
+	if start_pos.x == INF:
+		start_pos = __get_default_start_position(region_shape)
 	
-	_sample_region_rect = get_region_bbox(sample_region_shape)
-	_cell_size = get_cell_size(_radius)
-	var cols_and_rows = get_cols_and_rows(_sample_region_rect, _cell_size)
-	_cols = cols_and_rows.cols
-	_rows = cols_and_rows.rows
-	
-	_cell_size_scaled = get_cell_size_scaled(_sample_region_rect, cols_and_rows.cols, cols_and_rows.rows)
+	var region_bbox = __get_region_bbox(region_shape)
+	var cols_and_rows = __get_cols_and_rows(region_bbox, __get_cell_size(radius))
+	var cell_size_scaled = __get_cell_size_scaled(region_bbox, cols_and_rows.cols, cols_and_rows.rows)
 	# use tranpose to map points starting from origin to calculate grid position
-	_transpose = get_transpose(_sample_region_rect)
+	var transpose = __get_transpose(region_bbox)
+	var grid = __get_grid(cols_and_rows.cols, cols_and_rows.rows)
 	
-	_points = []
-	_spawn_points = []
-	_spawn_points.append(_start_pos)
+	var points = []
 	
-	_grid = get_grid(cols_and_rows.cols, cols_and_rows.rows)
-	
-	while _spawn_points.size() > 0:
-		var spawn_index: int = randi() % _spawn_points.size()
-		var spawn_centre: Vector2 = _spawn_points[spawn_index]
+	var spawn_points = []
+	spawn_points.append(start_pos)
+	while spawn_points.size() > 0:
+		var spawn_index: int = randi() % spawn_points.size()
+		var spawn_centre: Vector2 = spawn_points[spawn_index]
 		var sample_accepted: bool = false
 		for i in retries:
 			var angle: float = 2 * PI * randf()
 			var sample: Vector2 = spawn_centre + Vector2(cos(angle), sin(angle)) * (radius + radius * randf())
-			if _is_valid_sample(sample, _radius, _sample_region_shape, _sample_region_rect):
-				_grid[int((_transpose.x + sample.x) / _cell_size_scaled.x)][int((_transpose.y + sample.y) / _cell_size_scaled.y)] = _points.size()
-				_points.append(sample)
-				_spawn_points.append(sample)
+			if __is_valid_sample(sample, points, radius, region_shape, region_bbox, grid, cols_and_rows.cols, cols_and_rows.rows, transpose, cell_size_scaled):
+				grid[int((transpose.x + sample.x) / cell_size_scaled.x)][int((transpose.y + sample.y) / cell_size_scaled.y)] = points.size()
+				points.append(sample)
+				spawn_points.append(sample)
 				sample_accepted = true
 				break
 		if not sample_accepted:
-			_spawn_points.remove(spawn_index)
-	return _points
+			spawn_points.remove(spawn_index)
+	return points
 
-
-func _is_valid_sample(sample: Vector2, radius:float, region_shape, region_bbox) -> bool:
-	if _is_point_in_region(sample, region_shape, region_bbox):
-		var cell := Vector2(int((_transpose.x + sample.x) / _cell_size_scaled.x), int((_transpose.y + sample.y) / _cell_size_scaled.y))
+func __is_valid_sample(sample: Vector2, points, radius:float, region_shape, region_bbox, grid, cols, rows, transpose, cell_size_scaled) -> bool:
+	if __is_point_in_region(sample, region_shape, region_bbox):
+		var cell := Vector2(int((transpose.x + sample.x) / cell_size_scaled.x), int((transpose.y + sample.y) / cell_size_scaled.y))
 		var cell_start := Vector2(max(0, cell.x - 2), max(0, cell.y - 2))
-		var cell_end := Vector2(min(cell.x + 2, _cols - 1), min(cell.y + 2, _rows - 1))
+		var cell_end := Vector2(min(cell.x + 2, cols - 1), min(cell.y + 2, rows - 1))
 	
 		for i in range(cell_start.x, cell_end.x + 1):
 			for j in range(cell_start.y, cell_end.y + 1):
-				var search_index: int = _grid[i][j]
+				var search_index: int = grid[i][j]
 				if search_index != -1:
-					var dist: float = _points[search_index].distance_to(sample)
+					var dist: float = points[search_index].distance_to(sample)
 					if dist < radius:
 						return false
 		return true
 	return false
 
 
-func _is_point_in_region(sample: Vector2, region_shape, region_bbox) -> bool:
+func __is_point_in_region(sample: Vector2, region_shape, region_bbox) -> bool:
 	if region_bbox.has_point(sample):
 		match typeof(region_shape):
 			TYPE_RECT2:
@@ -101,8 +76,7 @@ func _is_point_in_region(sample: Vector2, region_shape, region_bbox) -> bool:
 				return false
 	return false
 
-#if _start_pos.x == INF:
-func get_default_start_position(region_shape):
+func __get_default_start_position(region_shape):
 	match typeof(region_shape):
 		TYPE_RECT2:
 			return Vector2(
@@ -122,7 +96,7 @@ func get_default_start_position(region_shape):
 		_:
 			return Vector2.ZERO
 
-func get_region_bbox(region_shape):
+func __get_region_bbox(region_shape):
 	match typeof(region_shape):
 		TYPE_RECT2:
 			return region_shape
@@ -147,25 +121,25 @@ func get_region_bbox(region_shape):
 			push_error("Unrecognized shape!!! Please input a valid shape")
 			return Rect2(0, 0, 0, 0)
 
-func get_cell_size(radius):
+func __get_cell_size(radius):
 	return radius / sqrt(2)
 
-func get_cols_and_rows(region_bbox, cell_size):
+func __get_cols_and_rows(region_bbox, cell_size):
 	return {
 		"cols": max(floor(region_bbox.size.x / cell_size), 1),
 		"rows": max(floor(region_bbox.size.y / cell_size), 1)
 	}
 
-func get_cell_size_scaled(region_bbox, cols, rows) -> Vector2:
+func __get_cell_size_scaled(region_bbox, cols, rows) -> Vector2:
 	return Vector2(
 		region_bbox.size.x / cols,
 		region_bbox.size.y / rows
 	)
 
-func get_transpose(region_bbox):
+func __get_transpose(region_bbox):
 	return -region_bbox.position
 
-func get_grid(cols, rows):
+func __get_grid(cols, rows):
 	var grid = []
 	for i in cols:
 		grid.append([])
