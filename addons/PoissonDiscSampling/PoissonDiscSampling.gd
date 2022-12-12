@@ -1,7 +1,7 @@
 class_name PoissonDiscSampling
 
 # radius - minimum distance between points
-# sample_region_shape - takes any of the following:
+# region_shape - takes any of the following:
 # 		-a Rect2 for rectangular region
 #		-an array of Vector2 for polygon region
 #		-a Vector3 with x,y as the position and z as the radius of the circle
@@ -43,6 +43,52 @@ func generate_points(radius: float, region_shape, retries:int = 30, start_pos :=
 		if not sample_accepted:
 			spawn_points.remove(spawn_index)
 	return points
+
+func generate_points_on_image(min_radius:float, max_radius:float, image_texture_resource:StreamTexture, region_shape, retries: int = 30, start_pos := Vector2(INF, INF)):
+	randomize()
+	
+	# If no special start position is defined, pick one
+	if start_pos.x == INF:
+		start_pos = __get_default_start_position(region_shape)
+	
+	var image:Image = image_texture_resource.get_data()
+	image.lock()
+	var region_bbox = __get_region_bbox(region_shape)
+	var cols_and_rows = __get_cols_and_rows(region_bbox, __get_cell_size(min_radius))
+	var cell_size_scaled = __get_cell_size_scaled(region_bbox, cols_and_rows.cols, cols_and_rows.rows)
+	# use tranpose to map points starting from origin to calculate grid position
+	var transpose = __get_transpose(region_bbox)
+	var grid = __get_grid(cols_and_rows.cols, cols_and_rows.rows)
+	
+	var points = []
+	var radii = []
+	
+	var spawn_points = []
+	spawn_points.append(start_pos)
+	print(cols_and_rows)
+	while spawn_points.size() > 0:
+		var spawn_index: int = randi() % spawn_points.size()
+		var spawn_centre: Vector2 = spawn_points[spawn_index]
+		var sample_accepted: bool = false
+		for i in retries:
+			var angle: float = 2 * PI * randf()
+			var brightness: float = __get_brightness_of_pixel_at(image, spawn_centre)
+			var radius: float = __map(brightness, 0, 1, min_radius, max_radius)
+			var sample: Vector2 = spawn_centre + Vector2(cos(angle), sin(angle)) * (radius + radius * randf())
+			if __is_valid_sample(sample, points, radius, region_shape, region_bbox, grid, cols_and_rows.cols, cols_and_rows.rows, transpose, cell_size_scaled):
+				grid[int((transpose.x + sample.x) / cell_size_scaled.x)][int((transpose.y + sample.y) / cell_size_scaled.y)] = points.size()
+				points.append(sample)
+				radii.append(radius)
+				spawn_points.append(sample)
+				sample_accepted = true
+				break
+		if not sample_accepted:
+			spawn_points.remove(spawn_index)
+	
+	return {
+		"points": points,
+		"radii": radii
+	}
 
 func __is_valid_sample(sample: Vector2, points, radius:float, region_shape, region_bbox, grid, cols, rows, transpose, cell_size_scaled) -> bool:
 	if __is_point_in_region(sample, region_shape, region_bbox):
@@ -146,3 +192,13 @@ func __get_grid(cols, rows):
 		for j in rows:
 			grid[i].append(-1)
 	return grid
+
+func __get_brightness_of_pixel_at(image:Image, position:Vector2) -> float:
+	if position.x > image.get_size().x || position.y > image.get_size().y:
+		return 0.0
+	var pixel_data = image.get_pixelv(position)
+	return (pixel_data[0] + pixel_data[1] + pixel_data[2]) / 3
+
+func __map(value:float, from_start:float = 0, from_end:float = 1, to_start:float = 0, to_end:float = 1):
+	# Ported from p5 https://github.com/processing/p5.js/blob/eef4ce6747bef887ecfb2f1112acec07fc944687/src/math/calculation.js#L448
+	return (value - from_start) / (from_end - from_start) * (to_end - to_start) + to_start
