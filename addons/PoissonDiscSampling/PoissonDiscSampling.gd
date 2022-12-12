@@ -23,7 +23,7 @@ var _transpose: Vector2
 # start_pos - optional parameter specifying the starting point
 #
 # returns an Array of Vector2D with points in the order of their discovery
-func generate_points(radius: float, sample_region_shape, retries: int, start_pos := Vector2(INF, INF)) -> Array:
+func generate_points(radius: float, sample_region_shape, retries:int = 30, start_pos := Vector2(INF, INF)) -> Array:
 	_radius = radius
 	_sample_region_shape = sample_region_shape
 	_retries = retries
@@ -37,7 +37,7 @@ func generate_points(radius: float, sample_region_shape, retries: int, start_pos
 		for i in retries:
 			var angle: float = 2 * PI * randf()
 			var sample: Vector2 = spawn_centre + Vector2(cos(angle), sin(angle)) * (radius + radius * randf())
-			if _is_valid_sample(sample):
+			if _is_valid_sample(sample, _radius, _sample_region_shape, _sample_region_rect):
 				_grid[int((_transpose.x + sample.x) / _cell_size_scaled.x)][int((_transpose.y + sample.y) / _cell_size_scaled.y)] = _points.size()
 				_points.append(sample)
 				_spawn_points.append(sample)
@@ -48,8 +48,8 @@ func generate_points(radius: float, sample_region_shape, retries: int, start_pos
 	return _points
 
 
-func _is_valid_sample(sample: Vector2) -> bool:
-	if _is_point_in_sample_region(sample):
+func _is_valid_sample(sample: Vector2, radius:float, region_shape, region_bbox) -> bool:
+	if _is_point_in_region(sample, region_shape, region_bbox):
 		var cell := Vector2(int((_transpose.x + sample.x) / _cell_size_scaled.x), int((_transpose.y + sample.y) / _cell_size_scaled.y))
 		var cell_start := Vector2(max(0, cell.x - 2), max(0, cell.y - 2))
 		var cell_end := Vector2(min(cell.x + 2, _cols - 1), min(cell.y + 2, _rows - 1))
@@ -59,22 +59,22 @@ func _is_valid_sample(sample: Vector2) -> bool:
 				var search_index: int = _grid[i][j]
 				if search_index != -1:
 					var dist: float = _points[search_index].distance_to(sample)
-					if dist < _radius:
+					if dist < radius:
 						return false
 		return true
 	return false
 
 
-func _is_point_in_sample_region(sample: Vector2) -> bool:
-	if _sample_region_rect.has_point(sample):
-		match typeof(_sample_region_shape):
+func _is_point_in_region(sample: Vector2, region_shape, region_bbox) -> bool:
+	if region_bbox.has_point(sample):
+		match typeof(region_shape):
 			TYPE_RECT2:
 				return true
 			TYPE_VECTOR2_ARRAY, TYPE_ARRAY:
-				if Geometry.is_point_in_polygon(sample, _sample_region_shape):
+				if Geometry.is_point_in_polygon(sample, region_shape):
 					return true
 			TYPE_VECTOR3:
-				if Geometry.is_point_in_circle(sample, Vector2(_sample_region_shape.x, _sample_region_shape.y), _sample_region_shape.z):
+				if Geometry.is_point_in_circle(sample, Vector2(region_shape.x, region_shape.y), region_shape.z):
 					return true
 			_:
 				return false
