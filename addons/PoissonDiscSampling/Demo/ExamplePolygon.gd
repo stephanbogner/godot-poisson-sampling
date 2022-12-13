@@ -13,8 +13,8 @@ func _draw() -> void:
 	for i in n:
 		draw_line(polygon[i], polygon[(i+1)%n], Color(1,1,0), 2, 1)
 	
-	draw_circle(points[k], radius / 2, Color( 1, 0, 0, 1 ))
-	draw_circle(points[k], 2, Color( 1, 1, 0, 1 ))
+	draw_circle(points[k], radius / 2, Color( 1, 0, 1, 1 ))
+	draw_circle(points[k], 2, Color( 0, 0, 0, 1 ))
 
 func _ready() -> void:
 	var pds = PoissonDiscSampling.new()
