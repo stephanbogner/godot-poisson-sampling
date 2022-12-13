@@ -44,7 +44,7 @@ func generate_points(radius: float, region_shape, retries:int = 30, start_pos :=
 			spawn_points.remove(spawn_index)
 	return points
 
-func generate_points_on_image(min_radius:float, max_radius:float, image_texture_resource:StreamTexture, region_shape, retries: int = 30, start_pos := Vector2(INF, INF)):
+func generate_points_on_image(min_radius:float, max_radius:float, image_texture_resource:StreamTexture, region_shape, scale_reference_image := Vector2(1,1), retries: int = 30, start_pos := Vector2(INF, INF)):
 	randomize()
 	
 	# If no special start position is defined, pick one
@@ -72,7 +72,7 @@ func generate_points_on_image(min_radius:float, max_radius:float, image_texture_
 		var sample_accepted: bool = false
 		for i in retries:
 			var angle: float = 2 * PI * randf()
-			var brightness: float = __get_brightness_of_pixel_at(image, spawn_centre)
+			var brightness: float = __get_brightness_of_pixel_at(image, spawn_centre * scale_reference_image)
 			var radius: float = __map(brightness, 0, 1, min_radius, max_radius)
 			var sample: Vector2 = spawn_centre + Vector2(cos(angle), sin(angle)) * (radius + radius * randf())
 			if __is_valid_sample(sample, points, radius, region_shape, region_bbox, grid, cols_and_rows.cols, cols_and_rows.rows, transpose, cell_size_scaled):
@@ -196,7 +196,7 @@ func __get_grid(cols, rows):
 func __get_brightness_of_pixel_at(image:Image, position:Vector2) -> float:
 	if position.x > image.get_size().x || position.y > image.get_size().y:
 		return 0.0
-	var pixel_data = image.get_pixelv(position)
+	var pixel_data = image.get_pixelv(Vector2( round(position.x), round(position.y) ))
 	return (pixel_data[0] + pixel_data[1] + pixel_data[2]) / 3
 
 func __map(value:float, from_start:float = 0, from_end:float = 1, to_start:float = 0, to_end:float = 1):
