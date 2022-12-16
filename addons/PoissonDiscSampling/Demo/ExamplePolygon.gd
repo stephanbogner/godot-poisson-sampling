@@ -4,7 +4,7 @@ extends Node2D
 onready var polygon: Array = $Polygon2D.polygon
 onready var n = polygon.size()
 
-var radius: int = 20
+var radius: int = 10
 var k: int = 0
 var points := []
 
@@ -13,7 +13,7 @@ func _draw() -> void:
 	for i in n:
 		draw_line(polygon[i], polygon[(i+1)%n], Color(1,1,0), 2, 1)
 	
-	draw_circle(points[k], radius / 2, Color( 1, 0, 1, 1 ))
+	draw_circle(points[k], radius, Color( 1, 0, 1, 1 ))
 	draw_circle(points[k], 2, Color( 0, 0, 0, 1 ))
 
 func _ready() -> void:

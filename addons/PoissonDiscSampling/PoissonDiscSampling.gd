@@ -24,6 +24,7 @@ func generate_points(radius: float, region_shape, retries:int = 30, start_pos :=
 	var grid = __get_grid(cols_and_rows.cols, cols_and_rows.rows)
 	
 	var points = []
+	var radii = []
 	
 	var spawn_points = []
 	spawn_points.append(start_pos)
@@ -34,9 +35,10 @@ func generate_points(radius: float, region_shape, retries:int = 30, start_pos :=
 		for i in retries:
 			var angle: float = 2 * PI * randf()
 			var sample: Vector2 = spawn_centre + Vector2(cos(angle), sin(angle)) * (radius + radius * randf())
-			if __is_valid_sample(sample, points, radius, region_shape, region_bbox, grid, cols_and_rows.cols, cols_and_rows.rows, transpose, cell_size_scaled):
+			if __is_valid_sample(sample, radius, points, radii, region_shape, region_bbox, grid, cols_and_rows.cols, cols_and_rows.rows, transpose, cell_size_scaled):
 				grid[int((transpose.x + sample.x) / cell_size_scaled.x)][int((transpose.y + sample.y) / cell_size_scaled.y)] = points.size()
 				points.append(sample)
+				radii.append(radius)
 				spawn_points.append(sample)
 				sample_accepted = true
 				break
@@ -75,7 +77,7 @@ func generate_points_on_image(min_radius:float, max_radius:float, image_texture_
 			var brightness: float = __get_brightness_of_pixel_at(image, spawn_centre * scale_reference_image)
 			var radius: float = __map(brightness, 0, 1, min_radius, max_radius)
 			var sample: Vector2 = spawn_centre + Vector2(cos(angle), sin(angle)) * (radius + radius * randf())
-			if __is_valid_sample(sample, points, radius, region_shape, region_bbox, grid, cols_and_rows.cols, cols_and_rows.rows, transpose, cell_size_scaled):
+			if __is_valid_sample(sample, radius, points, radii, region_shape, region_bbox, grid, cols_and_rows.cols, cols_and_rows.rows, transpose, cell_size_scaled):
 				grid[int((transpose.x + sample.x) / cell_size_scaled.x)][int((transpose.y + sample.y) / cell_size_scaled.y)] = points.size()
 				points.append(sample)
 				radii.append(radius)
@@ -90,18 +92,20 @@ func generate_points_on_image(min_radius:float, max_radius:float, image_texture_
 		"radii": radii
 	}
 
-func __is_valid_sample(sample: Vector2, points, radius:float, region_shape, region_bbox, grid, cols, rows, transpose, cell_size_scaled) -> bool:
+func __is_valid_sample(sample: Vector2, sample_radius:float, points:Array, radii:Array, region_shape, region_bbox, grid, cols, rows, transpose, cell_size_scaled) -> bool:
 	if __is_point_in_region(sample, region_shape, region_bbox):
 		var cell := Vector2(int((transpose.x + sample.x) / cell_size_scaled.x), int((transpose.y + sample.y) / cell_size_scaled.y))
-		var cell_start := Vector2(max(0, cell.x - 2), max(0, cell.y - 2))
-		var cell_end := Vector2(min(cell.x + 2, cols - 1), min(cell.y + 2, rows - 1))
+		var cell_search_radius:int = 2
+		var cell_start := Vector2(max(0, cell.x - cell_search_radius), max(0, cell.y - cell_search_radius))
+		var cell_end := Vector2(min(cell.x + cell_search_radius, cols - 1), min(cell.y + cell_search_radius, rows - 1))
 	
 		for i in range(cell_start.x, cell_end.x + 1):
 			for j in range(cell_start.y, cell_end.y + 1):
 				var search_index: int = grid[i][j]
 				if search_index != -1:
 					var dist: float = points[search_index].distance_to(sample)
-					if dist < radius:
+					var min_distance:float = (radii[search_index] + sample_radius) / 2
+					if dist < min_distance:
 						return false
 		return true
 	return false
@@ -194,9 +198,10 @@ func __get_grid(cols, rows):
 	return grid
 
 func __get_brightness_of_pixel_at(image:Image, position:Vector2) -> float:
-	if position.x > image.get_size().x || position.y > image.get_size().y:
+	var pixel_position := Vector2( round(position.x), round(position.y) )
+	if pixel_position.x >= image.get_size().x || pixel_position.y >= image.get_size().y:
 		return 0.0
-	var pixel_data = image.get_pixelv(Vector2( round(position.x), round(position.y) ))
+	var pixel_data = image.get_pixelv(pixel_position)
 	return (pixel_data[0] + pixel_data[1] + pixel_data[2]) / 3
 
 func __map(value:float, from_start:float = 0, from_end:float = 1, to_start:float = 0, to_end:float = 1):
