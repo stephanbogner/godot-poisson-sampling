@@ -67,7 +67,6 @@ func generate_points_on_image(min_radius:float, max_radius:float, image_texture_
 	
 	var spawn_points = []
 	spawn_points.append(start_pos)
-	print(cols_and_rows)
 	while spawn_points.size() > 0:
 		var spawn_index: int = randi() % spawn_points.size()
 		var spawn_centre: Vector2 = spawn_points[spawn_index]
@@ -202,7 +201,7 @@ func __get_brightness_of_pixel_at(image:Image, position:Vector2) -> float:
 	if pixel_position.x >= image.get_size().x || pixel_position.y >= image.get_size().y:
 		return 0.0
 	var pixel_data = image.get_pixelv(pixel_position)
-	return (pixel_data[0] + pixel_data[1] + pixel_data[2]) / 3
+	return (pixel_data[0] + pixel_data[1] + pixel_data[2]) / 3.0
 
 func __map(value:float, from_start:float = 0, from_end:float = 1, to_start:float = 0, to_end:float = 1):
 	# Ported from p5 https://github.com/processing/p5.js/blob/eef4ce6747bef887ecfb2f1112acec07fc944687/src/math/calculation.js#L448
